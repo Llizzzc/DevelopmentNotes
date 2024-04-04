@@ -1,9 +1,7 @@
 # Homebrew
-
 >1. [M1配置Homebrew](https://zhuanlan.zhihu.com/p/372576355 "homebrew")
 
 ## 常用命令
-
 + `/bin/zsh -c "$(curl -fsSL https://gitee.com/cunkai/HomebrewCN/raw/master/Homebrew.sh)"`	// 安装
 + `brew update`	// 更新brew
 + `brew outdated`	// 查看已安装的需要更新的软件

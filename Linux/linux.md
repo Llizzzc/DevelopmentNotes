@@ -1,7 +1,6 @@
 # Linux
->1. [韩顺平2018](https://www.bilibili.com/video/BV1dW411M7xL?p=9 "linux")
->2. [韩顺平2021](https://www.bilibili.com/video/BV1Sv411r7vd?p=52&vd_source=e5de1dabc977707311263a4bc0f609cc "linux")
->3. [查命令](https://wangchujiang.com/linux-command/ "linux")
+>1. [韩顺平2021](https://www.bilibili.com/video/BV1Sv411r7vd?p=52&vd_source=e5de1dabc977707311263a4bc0f609cc "linux")
+>2. [查命令](https://wangchujiang.com/linux-command/ "linux")
 
 ## 一 网络连接
 + 桥连接：Linux可以和其他系统通信，但是可能导致ip冲突

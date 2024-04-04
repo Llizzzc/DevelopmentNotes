@@ -1,5 +1,5 @@
 # MySQL
->1. [千峰教育2021](https://www.bilibili.com/video/BV1qb4y1Y722?p=29&spm_id_from=pageDriver "mysql")
+>1. [千峰教育2023](https://www.bilibili.com/video/BV1rL411a73q?vd_source=09affad7434dc5503f7339905bc2ccd7 "mysql")
 >2. [千峰教育2021高级篇](https://www.bilibili.com/video/BV1h64y1y77i/?spm_id_from=333.788.top_right_bar_window_custom_collection.content.click&vd_source=e5de1dabc977707311263a4bc0f609cc "mysql")
 
 ## 一 基本概念
@@ -116,11 +116,29 @@ default-character-set=utf8
 + `select Term from tbName order by Term asc|desc, ...; `	// 结果按字段排序，默认升序，可以先满足第一个规则再加其他规则
 + `select Term as NewName from tbName;`	// 给字段取别名
 + `select distinct Term from tbName;`	// 消除重复
-+ `select count(Term) from tbName;`	// 统计字段数
++ `select count(Term) from tbName;`	// 统计字段中非空数据的个数，\*统计表中行数
 + `select max|min(Term) from tbName;`	// 指定字段最大值或最小值
 + `select sum(Term) from tbName;`	// 查询指定字段数据总和
 + `select avg(Term) from tbName;`	// 查询指定字段数据平均值
++ `round(Term, Accuracy)`	// 设置精度
++ `ceil(Term)`	// 大于等于Num的最小整数
++ `floor(Term)`	// 小于等于Num的最大整数
++ `ifnull(Term, Result)`	// 如果字段为空则转为Result
 + `select now()|sysdate();`	// 获取当前系统时间，向datetime字段添加数据可以使用字符串，也可以使用now()和sysdate()
++ `curdate() | current_date() | current_date`	// 获取日期
++ `curtime() | current_time() | current_time`	// 获取时间
++ `year(now()) | month(now()) | day(now()) | hour(now()) | minute(now()) | second(now())`	// 获取年月日时分秒
++ `date_add(Date, interval Num Day)`	// 获取指定日期间隔指定时长的日期
++ `date_format(Date, Format)`	// 格式化日期，%Y四位年份，%y两位年份，%m月份，%d日，%H小时，%i分钟，%s秒
++ `str_to_date(Str, Format)`	// 将字符串转为日期
++ `dayofweek(now()) | dayofmonth(now()) | dayofyear(now())`	// 一周、月、年中的第几天
++ `last_day(now())`	// 获取给定日期所在月最后一天的日期
++ `datediff(Date1, Date2)`	// 日期差
++ `timediff(Date1, Date2)`	// 时间差
++ `if(Condition, Result1, Result2)`	// 类似三元运算符
++ `case Term when... then... else... end`	// 类似switch
++ `cast(Term as Type)`	// 类型转换
++ `md5(Term)`	// 加密
 + `select upper|lower(Term) from tbName;`	// 将指定字段的值转换大小写
 + `select substring(Term, Start, Len) from tbName;`	// 截取字段的值，Start从1开始
 + `select concat(Term1, '-', Term2) from tbName;`	// 拼接字段
@@ -134,6 +152,8 @@ default-character-set=utf8
 + `select ... from tbName1 left join tbName2 on Condition;`	// 左连接，显示tbName1中的所有数据，如果在tbName2中存在与前表满足匹配的数据，则一起显示，否则显示为null
 + `select ... from tbName1 right join tbName2 on Condition;`	// 与左连接相反
 + `select ... from tbName where Term=(select ...);`	// 嵌套查询，将子查询的结果作为父查询的条件，如果子查询返回多个结果，将=换成in，如果是跟在from后面，需要为子查询取别名
++ `select ... from tbName where exist (select ...)`	// 根据子查询是否存在记录来返回结果
++ `select ... union | union all select ...`	// 合并查询结果，union会进行去重
 ### 3.4 DCL：数据控制语言
 + `create user 'UserName'@'Ip' identified by 'Password';`	// 新增用户，Ip指定用户可以在哪个地址登陆，localhost为本地，%为任何地址
 + `rename user 'OldName'@'Ip' to 'NewName'@'Ip';`	// 修改用户名
