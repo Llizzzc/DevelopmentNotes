@@ -477,3 +477,45 @@ AOF详细的持久化过程如下：
 + 若对数据安全性要求不高，则推荐使用纯RDB持久化方式。
 + 不推荐使用纯AOF持久化方式。
 + 若Redis仅用于缓存，则无需使用任何持久化技术。
+
+## 五 集群
+### 5.1 主从集群搭建
+Redis的主从集群是一个“一主多从”的读写分离集群。集群中的Master节点负责处理
+客户端的读写请求，而Slave节点仅能处理客户端的读请求。只所以要将集群搭建为读写分
+离模式，主要原因是，对于数据库集群，写操作压力一般都较小，压力大多数来自于读操作
+请求。所以，只有一个节点负责处理写操作请求即可。
+#### 5.1.1 伪集群搭建与配置
+在采用单线程IO模型时，为了提高处理器的利用率，一般会在一个主机中安装多台Redis，
+构建一个Redis主从伪集群。当然，搭建伪集群的另一个场景是，在学习Redis，而学习用
+的主机内存不足以创建多个虚拟机。
+
+下面要搭建的读写分离伪集群包含一个Master与两个Slave。它们的端口号分别是：6380、
+6381、6382。
++ `mkdir cluster; cp redis.conf cluster;`	// 创建集群目录，复制配置文件
++ `masterauth`	// 搭建主从集群，由于每个主机都有可能会是Master，所以最好不要设置requirepass。如果真需要设置，一定要每个主机的密码都设置为相同的。masterauth用于指定当前slave访问master时的访问密码
++ `repl-disable-tcp-nodelay`	// 设置为yes则禁用tcp-nodelay，此时master与slave间的通信会产生延迟，但使用的TCP包数量会较少，占用的网络带宽会较小。相反，如果设置为no，则网络延迟会变小，但使用的TCP包数量会较多，相应占用的网络带宽会大
+
+首先添加redis6380.conf，redis6381.conf，redis6382.conf，然后全部启动并设置主从关系。
++ ```shell
+    include redis.conf
+    pidfile /var/run/redis_6380.pid
+    port 6380
+    dbfilename dump6380.rdb
+    appendfilename appendonly6380.aof
+    replica-priority 90
+	# logfile access6380.log
+	```
+
++ `slaveof Ip Port`	// 指定上级主机
++ `info replication`	// 查看当前连接的Redis客户端的状态信息
+#### 5.1.2 分级管理
+若Redis主从集群中的Slave较多时，它们的数据同步过程会对Master形成较大的性能
+压力。此时可以对这些Slave进行分级管理。设置方式很简单，只需要让低级别Slave指定其 slaveof的主机为其上一级Slave即可。不过，上一级Slave的状态仍为Slave，只不过其是更上一级的Slave。![](img/16.png)
+#### 5.1.3 容灾冷处理
+在Master/Slave的Redis集群中，若Master出现宕机怎么办呢？有两种处理方式，一种
+是通过手工角色调整，使Slave晋升为Master的冷处理；一种是使用哨兵模式，实现Redis
+集群的高可用HA，即热处理。
+
+无论Master是否宕机，Slave都可通过`slaveof no one`将自己由Slave晋升为Master。如果其原本就有下一级的Slave，那么，其就直接变为了这些Slave的真正的Master了。而原来的Master也会失去这个原来的Slave。
+### 5.2 主从复制原理
+#### 5.2.1 主从复制过程
