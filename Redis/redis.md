@@ -480,10 +480,7 @@ AOF详细的持久化过程如下：
 
 ## 五 集群
 ### 5.1 主从集群搭建
-Redis的主从集群是一个“一主多从”的读写分离集群。集群中的Master节点负责处理
-客户端的读写请求，而Slave节点仅能处理客户端的读请求。只所以要将集群搭建为读写分
-离模式，主要原因是，对于数据库集群，写操作压力一般都较小，压力大多数来自于读操作
-请求。所以，只有一个节点负责处理写操作请求即可。
+Redis的主从集群是一个“一主多从”的读写分离集群。集群中的Master节点负责处理客户端的读写请求，而Slave节点仅能处理客户端的读请求。只所以要将集群搭建为读写分离模式，主要原因是，对于数据库集群，写操作压力一般都较小，压力大多数来自于读操作请求。所以，只有一个节点负责处理写操作请求即可。
 #### 5.1.1 伪集群搭建与配置
 在采用单线程IO模型时，为了提高处理器的利用率，一般会在一个主机中安装多台Redis，
 构建一个Redis主从伪集群。当然，搭建伪集群的另一个场景是，在学习Redis，而学习用
@@ -493,9 +490,9 @@ Redis的主从集群是一个“一主多从”的读写分离集群。集群中
 6381、6382。
 + `mkdir cluster; cp redis.conf cluster;`	// 创建集群目录，复制配置文件
 + `masterauth`	// 搭建主从集群，由于每个主机都有可能会是Master，所以最好不要设置requirepass。如果真需要设置，一定要每个主机的密码都设置为相同的。masterauth用于指定当前slave访问master时的访问密码
-+ `repl-disable-tcp-nodelay`	// 设置为yes则禁用tcp-nodelay，此时master与slave间的通信会产生延迟，但使用的TCP包数量会较少，占用的网络带宽会较小。相反，如果设置为no，则网络延迟会变小，但使用的TCP包数量会较多，相应占用的网络带宽会大
++ `repl-disable-tcp-nodelay`	// 设置为yes则禁用tcp-nodelay，此时Master与Slave间的通信会产生延迟，但使用的TCP包数量会较少，占用的网络带宽会较小。相反，如果设置为no，则网络延迟会变小，但使用的TCP包数量会较多，相应占用的网络带宽会大
++ `touch redis6380.conf redis6381.conf redis6382.conf`	// 添加主从配置文件，如下所示
 
-首先添加redis6380.conf，redis6381.conf，redis6382.conf，然后全部启动并设置主从关系。
 + ```shell
     include redis.conf
     pidfile /var/run/redis_6380.pid
@@ -509,13 +506,107 @@ Redis的主从集群是一个“一主多从”的读写分离集群。集群中
 + `slaveof Ip Port`	// 指定上级主机
 + `info replication`	// 查看当前连接的Redis客户端的状态信息
 #### 5.1.2 分级管理
-若Redis主从集群中的Slave较多时，它们的数据同步过程会对Master形成较大的性能
-压力。此时可以对这些Slave进行分级管理。设置方式很简单，只需要让低级别Slave指定其 slaveof的主机为其上一级Slave即可。不过，上一级Slave的状态仍为Slave，只不过其是更上一级的Slave。![](img/16.png)
+若Redis主从集群中的Slave较多时，它们的数据同步过程会对Master形成较大的性能压力。此时可以对这些Slave进行分级管理。设置方式很简单，只需要让低级别Slave指定其 `slaveof`的主机为其上一级Slave即可。不过，上一级Slave的状态仍为Slave，只不过其是更上一级的Slave。![](img/16.png)
 #### 5.1.3 容灾冷处理
-在Master/Slave的Redis集群中，若Master出现宕机怎么办呢？有两种处理方式，一种
-是通过手工角色调整，使Slave晋升为Master的冷处理；一种是使用哨兵模式，实现Redis
-集群的高可用HA，即热处理。
+在Master/Slave的Redis集群中，若Master出现宕机怎么办呢？有两种处理方式，一种是通过手工角色调整，使Slave晋升为Master的冷处理；一种是使用哨兵模式，实现Redis集群的高可用，即热处理。
 
 无论Master是否宕机，Slave都可通过`slaveof no one`将自己由Slave晋升为Master。如果其原本就有下一级的Slave，那么，其就直接变为了这些Slave的真正的Master了。而原来的Master也会失去这个原来的Slave。
 ### 5.2 主从复制原理
 #### 5.2.1 主从复制过程
+1. 保存Master地址：当Slave接收到`slaveof`指令后，Slave会立即将新的Master的地址保存下来。
+2. 建立连接：Slave中维护着一个定时任务，该定时任务会尝试着与该Master建立socket连接。如果连接无法建立，则其会不断定时重试，直到连接成功或接收到`slaveof no one`指令。
+3. Slave发送ping命令：连接建立成功后，Slave会发送ping命令进行首次通信。如果Slave没有收到Master的回复，则Slave会主动断开连接，下次的定时任务会重新尝试连接。
+4. 对Slave身份验证：如果Master到了Slave的ping命令，并不会立即对其进行回复，而是会先进行身份验证。如果验证失败，则会发送消息拒绝连接；如果验证成功，则向Slave发送连接成功响应。
+5. Master持久化：首次通信成功后，Slave会向Master发送数据同步请求。当Master接收到请求后，会fork出一个子进程，让子进程以异步方式立即进行持久化。
+6. 数据发送：持久化完毕后Master会再fork出一个子进程，让该子进程以异步方式将数据发送给Slave。Slave会将接收到的数据不断写入到本地的持久化文件中。在Slave数据同步过程中，Master的主进程仍在不断地接受着客户端的写操作，且不仅将新的数据写入到了Master内存，同时也写入到了同步缓存。当Master的持久化文件中的数据发送完毕后，Master会再将同步缓存中新的数据发送给Slave，由Slave将其写入到本地持久化文件中。
+7. Slave恢复内存数据：当Slave与Master的数据同步完成后，Slave就会读取本地的持久化文件，将其恢复到本地内存，然后就可以对外提供读服务了。
+8. 持续增量复制：在Slave对外提供服务过程中，Master会持续不断的将新的数据以增量方式发送给Slave，以保证主从数据的一致性。
+#### 5.2.2 数据同步演变过程
+##### 5.2.2.1 sync同步
+Redis2.8版本之前，首次通信成功后，Slave会向Master发送sync数据同步请求。然后Master就会将其所有数据全部发送给Slave，由Slave保存到其本地的持久化文件中。这个过
+程称为全量复制。
+
+但这里存在一个问题：在全量复制过程中可能会出现由于网络抖动而导致复制过程中断。当网络恢复后，Slave与Master重新连接成功，此时Slave会重新发送sync请求，然后会从头开始全量复制。
+
+由于全量复制过程非常耗时，所以期间出现网络抖动的概率很高。而中断后的从头开始不仅需要消耗大量的系统资源、网络带宽，而且可能会出现长时间无法完成全量复制的情况。
+##### 5.2.2.2 psync同步
+Redis2.8版本之后，全量复制采用了psync（Partial Sync，不完全同步）同步策略。当全量复制过程出现由于网络抖动而导致复制过程中断时，当重新连接成功后，复制过程可以“断点续传”。即从断开位置开始继续复制，而不用从头再来。这就大大提升了性能。为了实现 psync，整个系统做了三个大的变化：
++ 复制偏移量：系统为每个要传送数据进行了编号，该编号从0开始，每个字节一个编号。该编号称为复制偏移量。参与复制的主从节点都会维护该复制偏移量。Master每发送过一个字节数据后就会进行累计。统计信息通过`info replication`的`master_repl_offset`可查看到。同时，Slave会定时向Master上报其自身已完成的复制偏移量给Master，所以Master也会保存Slave的复制偏移量offset。Slave在接收到Master的数据后，也会累计接收到的偏移量。统计信息通过`info replication`的`slave_repl_offset`可查看到。
++ 主节点复制ID：当Master启动后就会动态生成一个长度为40位的16进制字符串作为当前Master的复制ID，该ID是在进行数据同步时Slave识别Master使用的。通过`info replication`的`master_replid`属性可查看到。
++ 复制积压缓冲区：当Master有连接的Slave时，在Master中就会创建并维护一个队列backlog，默认大小为1MB，该队列称为复制积压缓冲区。Master接收到了写操作数据不仅会写入到Master主存，而且还会写入到复制积压缓冲区。其作用就是用于保存最近操作的数据，以备“断点续传”时做数据补偿，防止数据丢失。
++ psync同步过程：psync是一个由Slave提交的命令，其格式为`psync master_replid repl_offset`，表示当前Slave要从指定的Master中的repl_offset+1处开始复制。repl_offset表示当前Slave已经完成复制的数据的offset。该命令保证了“断点续传”的实现。在第一次开始复制时，Slave并不知道Master的动态ID，并且一定是从头开始复制，所以其提交的psync命令为`psync ? -1`。
++ 存在的问题：在psync数据同步过程中，若Slave重启，在Slave内存中保存的Master的动态ID与续传offset都会消失，“断点续传”将无法进行，从而只能进行全量复制。在psync数据同步过程中，Master宕机后Slave会发生“易主”，从而导致Slave需要重新进行全量复制。
+##### 5.2.2.3 psync同步的改进
++ 解决Slave重启问题：改进后的psync将Master的动态ID直接写入到了Slave的持久化文件中。
++ 解决Slave易主问题：由于改进后的psync中每个Slave都在本地保存了当前Master的动态ID，所以当Slave晋升为新的Master后，其本地仍保存有之前Master的动态ID。而这一点也恰恰为解决“Slave易主”问题提供了条件。通过Master的`info replicaton`中的`master_replid2`可查看到。如果尚未发生过易主，则该值为40个0。
+##### 5.2.2.4 无盘操作
+Redis6.0对同步过程又进行了改进，提出了“无盘全量同步”与“无盘加载”策略，避免了耗时的IO操作。
++ 无盘全量同步：Master的主进程fork出的子进程直接将内存中的数据发送给Slave，无需经过磁盘。
++ 无盘加载：Slave在接收到Master发送来的数据后不需要将其写入到磁盘文件，而是直接写入到内存，这样Slave就可快速完成数据恢复。
+##### 5.2.2.5  共享复制积压缓冲区
+Redis7.0版本对复制积压缓冲区进行了改进，让各个Slave的发送缓冲区共享复制积压缓冲区。这使得复制积压缓冲区的作用，除了可以保障数据的安全性外，还作为所有Slave的发送缓冲区，充分利用了复制积压缓冲区。
+### 5.3 哨兵机制实现
+#### 5.3.1 简介
+对于Master宕机后的冷处理方式是无法实现高可用的。Redis从2.6版本开始提供了高可用的Sentinel哨兵机制。在集群中再引入一个节点，该节点充当Sentinel哨兵，用于监视Master的运行状态，并在Master宕机后自动指定一个Slave作为新的Master。
+
+不过，此时的Sentinel哨兵又成为了一个单点故障点：若哨兵发生宕机，整个集群将瘫痪。所以为了解决Sentinel的单点问题，又要为Sentinel创建一个集群。每个Sentinel都会定时向Master发送心跳，如果Master在有效时间内向它们都进行了响应，则说明Master是活着的。如果Sentinel中有`quorum`个哨兵没有收到响应，那么就认为Master已经宕机，然后会有一个Sentinel做故障转移。即将原来的某一个Slave晋升为Master。
+#### 5.3.2 Redis高可用集群搭建
+在“不差钱”的情况下，可以让Sentinel占用独立的主机，即在Redis主机上只启动Redis进程，在Sentinel主机上只启动Sentinel进程。下面要搭建一个“一主二从三哨兵”的高可用伪集群，即这些角色全部安装运行在一台主机上。“一主二从”使用前面的主从集群，下面仅搭建一个Sentinel伪集群，端口号分别为：26380、26381、26382。
++ `cp sentinel.conf cluster`	// 复制公共配置文件
++ `sentinel monitor`	// 该配置用于指定Sentinel要监控的Master，并为Master起了一个名字。同时指定Sentinel集群中决定该Master”客观下线状态”判断的法定Sentinel数量`quorum`。`quorum`的另一个用途与Sentinel的Leader选举有关。要求至少要有max(quorum, sentinelNum/2+1)个Sentinel参与，选举才能进行
++ `sentinel auth-pass`	// 如果Redis主从集群中的主机设置了访问密码，那么就需要指定Master的主机名与访问密码，以便Sentinel监控Master
++ `touch sentinel26380.conf sentinel26381.conf sentinel26382.conf`	// 添加哨兵集群配置文件，如下所示
+
++ ```shell
+    include sentinel.conf
+    pidfile /var/run/sentinel_26380.pid
+    port 26380
+    sentinel monitor mymaster 127.0.0.1 6380 2
+	# logfile access26380.log
+	```
+	
++ `redis-sentinel Sentinel.conf; redis-server Sentine.conf --sentinel`	// 启动哨兵
++ `redis-cli -p Port info sentinel`	// 查看哨兵信息
+#### 5.3.3 Sentinel优化配置
++ `sentinel down-after-milliseconds`	// 定期发送ping命令来判断Master、Slave及其它Sentinel是否存活
++ `sentinel parallel-syncs`	// 指定在故障转移期间，即老Master出现问题，新Master晋升后，允许多少个Slave同时从新Master进行数据同步。默认值为1表示所有Slave逐个从新Master进行数据同步
++ `sentinel failover-timeout`	// 指定故障转移的超时时间
++ `sentinel deny-scripts-reconfig`	// 指定是否可以通过命令`sentinel set`动态修改`notification-script`与`client-reconfig-script`两个脚本。默认是不能的。这两个脚本如果允许动态修改，可能会引发安全问题
++ `sentinel set Config`	// 在redis-cli中修改配置文件信息
+### 5.4 哨兵机制原理
+#### 5.4.1 三个定时任务
++ info任务：每个Sentinel节点每10秒就会向Redis集群中的每个节点发送info命令，以获得最新的Redis拓扑结构
++ 心跳任务：每个Sentinel节点每1秒就会向所有Redis节点及其它Sentinel节点发送一条ping命令，以检测这些节点的存活状态。该任务是判断节点在线状态的重要依据
++ 发布/订阅任务：每个Sentinel节点在启动时都会向所有Redis节点订阅`__sentinel__:hello`主题的信息，当Redis节点中该主题的信息发生了变化，就会立即通知到所有订阅者。启动后，每个Sentinel节点每2秒就会向每个Redis节点发布一条`__sentinel__:hello`主题的信息，该信息是当前Sentinel对每个Redis节点在线状态的判断结果及当前Sentinel节点信息
+### 5.4.2 Redis节点下线判断
++ 主观下线：每个Sentinel节点每秒就会向每个Redis节点发送ping心跳检测，如果Sentinel在`down-after-milliseconds`时间内没有收到某Redis节点的回复，则Sentinel节点就会对该Redis节点做出“下线状态”的判断。这个判断仅仅是当前Sentinel节点的“一家之言”，所以称为主观下线
++ 客观下线：当Sentinel主观下线的节点是Master时，该Sentinel节点会向每个其它Sentinel节点发送`sentinel is-master-down-by-addr`命令，以询问其对Master在线状态的判断结果。这些Sentinel节点在收到命令后会向这个发问Sentinel节点响应0（在线）或1（下线）。当Sentinel收到超过`quorum`个下线判断后，就会对Master做出客观下线判断
+### 5.4.3 Sentinel Leader选举
+当Sentinel节点对Master做出客观下线判断后会由Sentinel Leader来完成后续的故障转
+移，即Sentinel集群中的节点也并非是对等节点，是存在Leader与Follower的。Sentinel集群的Leader选举是通过Raft算法实现的。Raft算法比较复杂，这里仅简单介绍一下大致思路。
+
+每个选举参与者都具有当选Leader的资格，当其完成了“客观下线”判断后，就会立即“毛遂自荐”推选自己做Leader，然后将自己的提案发送给所有参与者。其它参与者在收到提案后，只要自己手中的选票没有投出去，其就会立即通过该提案并将同意结果反馈给提案者，后续再过来的提案会由于该参与者没有了选票而被拒绝。当提案者收到了同意反馈数量大于等于max(quorum, sentinelNum/2+1)时，该提案者当选Leader。
+
+说明：
++ 在网络没有问题的前提下，基本就是谁先做出了“客观下线”判断，谁就会首先发起Sentinel Leader的选举，谁就会得到大多数参与者的支持，谁就会当选Leader
++ Sentinel Leader选举会在次故障转移发生之前进行。
++ 故障转移结束后Sentinel不再维护这种Leader-Follower关系，即Leader不再存在
+### 5.4.4 Master选择算法
+在进行故障转移时，Sentinel Leader需要从所有Redis的Slave节点中选择出新的Master。其选择算法为：
+1. 过滤掉所有主观下线的，或心跳没有响应Sentinel的，或`replica-priority`值为0的Redis节点
+2. 在剩余Redis节点中选择出`replica-priority`最小的的节点列表。如果只有一个节点，则直接返回，否则，继续
+3. 从优先级相同的节点列表中选择复制偏移量最大的节点。如果只有一个节点，则直接返
+回，否则，继续
+4. 从复制偏移值量相同的节点列表中选择动态ID最小的节点返回
+### 5.4.5 故障转移过程
+Sentinel Leader负责整个故障转移过程，经历了如下步骤：
+1. Sentinel Leader根据Master选择算法选择出一个Slave节点作为新的Master
+2. Sentinel Leader向新Master节点发送`slaveof no one`指令，使其晋升为Master
+3. Sentinel Leader向新Master发送`info replication`指令，获取到Master的动态ID
+4. Sentinel Leader向其余Redis节点发送消息，以告知它们新Master的动态ID
+5. Sentinel Leader向其余Redis节点发送`slaveof MasterIp MasterPort`指令，使它们成为新Master的Slave
+6. Sentinel Leader从所有Slave节点中每次选择出`parallel-syncs`个Slave从新Master同步数据，直至所有Slave全部同步完毕
+### 5.4.6 节点上线
++ 原Redis节点上线：无论是原下线的Master节点还是原下线的Slave节点，只要是原Redis集群中的节点上线，只需启动Redis即可。因为每个Sentinel中都保存有原来其监控的所有Redis节点列表，Sentinel会定时查看这些Redis节点是否恢复。如果查看到其已经恢复，则会命其从当前Master进行数据同步。不过，如果是原Master上线，在新Master晋升后Sentinel Leader会立即先将原Master节点更新为Slave，然后才会定时查看其是否恢复
++ 新Redis节点上线：如果需要在Redis集群中添加一个新的节点，其未曾出现在Redis集群中，则上线操作只能手工完成。即添加者在添加之前必须知道当前Master是谁，然后在新节点启动后运行`slaveof`命令加入集群
++ Sentinel节点上线：如果要添加的是Sentinel节点，无论其是否曾经出现在Sentinel集群中，都需要手工完成。即添加者在添加之前必须知道当前Master 是谁，然后在配置文件中修改`sentinel monitor`属性，之后启动 Sentinel 即可
