@@ -148,7 +148,7 @@ DockerFile 是用来构建 Docker 镜像的文本文件，是由一条条构建�
 #### 5.2.2 执行 DockerFile 的大致流程
 1. Docker 从基础镜像运行一个容器
 2. 执行一条指令并对容器作出修改
-3. 执行类似`docker commit`的操作提交一个新的镜像层
+3. 执行类似 `docker commit` 的操作提交一个新的镜像层
 4. Docker 再基于刚提交的镜像运行一个新容器
 5. 执行 DockerFile 中的下一条指令直到所有指令都执行完成
 #### 5.2.3 总结
@@ -159,7 +159,25 @@ DockerFile 是用来构建 Docker 镜像的文本文件，是由一条条构建�
 
 DockerFile 面向开发，Docker 镜像成为交付标准，Docker 容器则涉及部署与运维，三者缺一不可，合力充当 Docker 体系的基石。![](./img/08.png)
 
-1. DockerFile：需要定义一个 DockerFile，DockerFile 定义了进程需要的一切东西。DockerFile 涉及的内容包括执行代码或者是文件、环境变量、依赖包、运行时环境、动态链接库、操作系统的发行版、服务进程和内核进程（当应用进程需要和系统服务和内核进程打交道，这时需要考虑如何设计 namespace 的权限控制）等等。
-2. Docker 镜像：在用 DockerFile定义一个文件之后，`docker build`时会产生一个 Docker 镜像，当运行 Docker 镜像时会真正开始提供服务。
-3. Docker容器：容器是直接提供服务的。
-
+1. DockerFile：需要定义一个 DockerFile，DockerFile 定义了进程需要的一切东西。DockerFile 涉及的内容包括执行代码或者是文件、环境变量、依赖包、运行时环境、动态链接库、操作系统的发行版、服务进程和内核进程（当应用进程需要和系统服务和内核进程打交道，这时需要考虑如何设计 namespace 的权限控制）等等
+2. Docker 镜像：在用 DockerFile 定义一个文件之后，`docker build` 时会产生一个 Docker 镜像，当运行 Docker 镜像时会真正开始提供服务
+3. Docker 容器：容器是直接提供服务的
+#### 5.3 DockerFile 常用指令
+[参考模板](https://github.com/docker-library/tomcat "tomcat")
++ `FROM`：基础镜像，当前新镜像是基于哪个镜像的，指定一个已经存在的镜像作为模板，必须为首行
++ `MAINTAINER`：镜像维护者的姓名和邮箱地址
++ `RUN`：容器构建时需要运行的命令，即 `docker build` 
+	+ `RUN Command`	// Command 为 Shell 命令
+	+ `RUN ["File","Param1","Param2",...]`	// 等同于 `./File  Param1 Param2...`
++ `EXPOSE`：当前容器对外暴露出的端口
++ `WORKDIR`：指定在创建容器后，终端默认登陆的进来工作目录，一个落脚点
++ `USER`：指定该镜像以什么用户去执行，如果都不指定，默认是 root
++ `ENV`：用来在构建镜像过程中设置环境变量，相当于定义变量，通过$访问
++ `ADD`：将宿主机目录下的文件拷贝进镜像且会自动处理 URL 和解压 tar 压缩包
++ `COPY`：类似 ADD，拷贝文件和目录到镜像中
+	+ `COPY Src Dest`
+	+ `COPY ["Src","Dest"]`
++ `VOLUME`：容器数据卷，用于数据保存和持久化工作
++ `CMD`：指定容器启动后的要干的事情	// 格式类似于 RUN。DockerFile 中可以有多个 CMD 指令，但只有最后一个生效，并且 CMD 会被 `docker run` 之后的参数替换
++ `ENTRYPOINT`：也是用来指定一个容器启动时要运行的命令
+	+ `ENTRYPOINT ["Executeable","Param1",...]`	//  Param1 相当于定参，如果同时存在 CMD，则 CMD 作为参数放在 Param1 之后。如果 DockerFile 中如果存在多个 ENTRYPOINT 指令，仅最后一个生效
