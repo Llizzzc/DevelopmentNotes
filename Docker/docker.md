@@ -162,7 +162,7 @@ DockerFile 面向开发，Docker 镜像成为交付标准，Docker 容器则涉�
 1. DockerFile：需要定义一个 DockerFile，DockerFile 定义了进程需要的一切东西。DockerFile 涉及的内容包括执行代码或者是文件、环境变量、依赖包、运行时环境、动态链接库、操作系统的发行版、服务进程和内核进程（当应用进程需要和系统服务和内核进程打交道，这时需要考虑如何设计 namespace 的权限控制）等等
 2. Docker 镜像：在用 DockerFile 定义一个文件之后，`docker build` 时会产生一个 Docker 镜像，当运行 Docker 镜像时会真正开始提供服务
 3. Docker 容器：容器是直接提供服务的
-#### 5.3 DockerFile 常用指令
+### 5.3 DockerFile 常用指令
 [参考模板](https://github.com/docker-library/tomcat "tomcat")
 + `FROM`：基础镜像，当前新镜像是基于哪个镜像的，指定一个已经存在的镜像作为模板，必须为首行
 + `MAINTAINER`：镜像维护者的姓名和邮箱地址
@@ -181,3 +181,27 @@ DockerFile 面向开发，Docker 镜像成为交付标准，Docker 容器则涉�
 + `CMD`：指定容器启动后的要干的事情	// 格式类似于 RUN。DockerFile 中可以有多个 CMD 指令，但只有最后一个生效，并且 CMD 会被 `docker run` 之后的参数替换
 + `ENTRYPOINT`：也是用来指定一个容器启动时要运行的命令
 	+ `ENTRYPOINT ["Executeable","Param1",...]`	//  Param1 相当于定参，如果同时存在 CMD，则 CMD 作为参数放在 Param1 之后。如果 DockerFile 中如果存在多个 ENTRYPOINT 指令，仅最后一个生效
+
+## 六 Docker Network
+### 6.1 简介
+容器间的互联和通信以及端口映射，容器 IP 变动时候可以通过服务名直接网络通信而不受到影响。
++ `docker network ls`	// 列出当前网络
++ `docker network inspect Network`	// 查看网络详情
++ `docker network rm Network`	// 删除网络
+### 6.2 网络模式
++ bridge：为每一个容器分配、设置 IP 等，并将容器连接到一个 docker0 虚拟网桥，默认为该模式，`--network bridge`
++ host：容器将不会虚拟出自己的网卡，配置自己的 IP 等，而是使用宿主机的 IP 和端口，`--network host`
++ none：容器有独立的 Network namespace，但并没有对其进行任何网络设置，如分配 veth pair 和网桥连接，IP 等，`--network none`
++ container：新创建的容器不会创建自己的网卡和配置自己的 IP，而是和一个指定的容器共享 IP、端口范围等，`--network container:Container/ID`
+### 6.3 架构图解
+从其架构和运行流程来看，Docker 是一个 C/S 模式的架构，后端是一个松耦合架构，众多模块各司其职。
+![](./img/09.png)
+
+Docker 运行的基本流程为：
+1. 用户是使用 Docker Client 与 Docker Daemon 建立通信，并发送请求给后者
+2. Docker Daemon 作为 Docker 架构中的主体部分，首先提供 Docker Server 的功能使其可以接受 Docker Client 的请求
+3. Docker Engine 执行 Docker 内部的一系列工作，每一项工作都是以一个 Job 的形式的存在
+4. Job 的运行过程中，当需要容器镜像时，则从 Docker Registry 中下载镜像，并通过镜像管理驱动 Graph Driver 将下载镜像以 Graph 的形式存储
+5. 当需要为 Docker 创建网络环境时，通过网络管理驱动 Network Driver 创建并配置 Docker 容器网络环境
+6. 当需要限制 Docker 容器运行资源或执行用户指令等操作时，则通过 Exec Driver 来完成
+7. Lib Container 是一项独立的容器管理包，Network Driver 以及 Exec Driver 都是通过 Lib Container 来实现具体对容器进行的操作
