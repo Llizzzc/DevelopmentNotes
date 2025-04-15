@@ -54,7 +54,7 @@ Docker是一个C/S（Client/Server）结构的系统，后端是一个松耦合�
 + `systemctl status docker`	// 查看状态
 + `systemctl enable docker`	// 开机启动
 + `docker info`	// 查看信息
-+ `docker Command --help`	// 查看帮助
++ `docker command --help`	// 查看帮助
 
 ## 三 镜像
 镜像是一种轻量级、可执行的独立软件包，它包含运行某个软件所需的所有内容，我们把应用程序和配置依赖打包好行成一个可交付的运行环境（包括代码、运行时需要的库、环境变量和配置文件等），这个打包好的运行环境就是镜像文件。
@@ -85,7 +85,8 @@ bootfs（boot file system）主要包含加载器和内核，加载器主要是�
 
 在Docker镜像的最底层是引导文件系统bootfs。这一层与我们典型的Linux/Unix系统是一样的，包含加载器和内核。当boot加载完成之后整个内核就都在内存中了，此时内存的使用权已经由bootfs转交给内核，此时系统也会卸载bootfs。
 
-rootfs（root file system），在bootfs之上，包含的就是典型Linux系统中的/dev、/proc、/bin、/etc等标准目录和文件。rootfs就是各种不同的操作系统发行版，比如Ubuntu、CentOS等。![](./img/03.jpeg)
+rootfs（root file system），在bootfs之上，包含的就是典型Linux系统中的/dev、/proc、/bin、/etc等标准目录和文件。rootfs就是各种不同的操作系统发行版，比如Ubuntu、CentOS等。
+![](./img/03.jpeg)
 
 对于一个精简的OS，rootfs可以很小，只需要包括最基本的命令、工具和程序库就可以了，因为底层直接使用主机的内核，自己只需要提供rootfs就可以。所以，对于不同的Linux发行版，bootfs基本是一致的，rootfs会有差别，不同的发行版可以共用bootfs。![](./img/04.jpeg)
 #### 3.2.3 镜像分层
@@ -129,3 +130,36 @@ Docker Registry是官方提供的工具，用于构建私有镜像仓库。Docke
 + 数据卷的生命周期一直持续到没有容器使用它为止
 + `docker run -it --privileged=true -v HostDirectory:ContainerDirectory:(rw|ro) Image`	// --privileged=true扩大容器的权限解决挂载没有权限的问题，-v指定挂载，rw|ro代表读写或只读
 + `docker run -it --privileged=true --volumes-from Container --name=Name Image`	// --volumes-from继承Container的容器卷映射配置
+
+## 五 DockerFile
+### 5.1 简介
+DockerFile 是用来构建 Docker 镜像的文本文件，是由一条条构建镜像所需的指令和参数构成的脚本。
+![](./img/07.png)
+构建三步骤
+1. 编写 DockerFile 文件
+2. `docker build` 命令构建镜像
+3. `docker run Image` 运行容器实例
+### 5.2 构建过程解析
+#### 5.2.1 基础
+1. 每条保留字指令都必须为大写字母且后面要跟随至少一个参数
+2. 指令按照从上到下，顺序执行
+3. #表示注释
+4. 每条指令都会创建一个新的镜像层并对镜像进行提交
+#### 5.2.2 执行 DockerFile 的大致流程
+1. Docker 从基础镜像运行一个容器
+2. 执行一条指令并对容器作出修改
+3. 执行类似`docker commit`的操作提交一个新的镜像层
+4. Docker 再基于刚提交的镜像运行一个新容器
+5. 执行 DockerFile 中的下一条指令直到所有指令都执行完成
+#### 5.2.3 总结
+从应用软件的角度来看，DockerFile、Docker 镜像与 Docker 容器分别代表软件的三个不同阶段：
++ DockerFile 是软件的原材料
++ Docker 镜像是软件的交付品
++ Docker 容器则可以认为是软件镜像的运行态，也即依照镜像运行的容器实例
+
+DockerFile 面向开发，Docker 镜像成为交付标准，Docker 容器则涉及部署与运维，三者缺一不可，合力充当 Docker 体系的基石。![](./img/08.png)
+
+1. DockerFile：需要定义一个 DockerFile，DockerFile 定义了进程需要的一切东西。DockerFile 涉及的内容包括执行代码或者是文件、环境变量、依赖包、运行时环境、动态链接库、操作系统的发行版、服务进程和内核进程（当应用进程需要和系统服务和内核进程打交道，这时需要考虑如何设计 namespace 的权限控制）等等。
+2. Docker 镜像：在用 DockerFile定义一个文件之后，`docker build`时会产生一个 Docker 镜像，当运行 Docker 镜像时会真正开始提供服务。
+3. Docker容器：容器是直接提供服务的。
+
